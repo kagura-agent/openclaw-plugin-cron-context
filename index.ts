@@ -61,7 +61,10 @@ function loadCronJobs(openclawDir: string): CronStoreFile | null {
  * Format: agent:<agentId>:cron:<jobId>:run:<runId>
  */
 function extractCronJobId(sessionKey: string): string | null {
-  const match = sessionKey.match(/:cron:([^:]+):run:/);
+  // Format may be:
+  //   agent:<agentId>:cron:<jobId>:run:<runId>
+  //   agent:<agentId>:cron:<jobId>
+  const match = sessionKey.match(/:cron:([^:]+)(?::run:|$)/);
   return match ? match[1] : null;
 }
 
