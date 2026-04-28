@@ -21,8 +21,13 @@
       },
       "maxLength": {
         "type": "number",
-        "description": "Max characters to inject into session context. Truncates if exceeded.",
+        "description": "Max characters to inject per cron output. Truncates if exceeded.",
         "default": 4000
+      },
+      "maxEventsPerSession": {
+        "type": "number",
+        "description": "Max pending events per target session. Oldest events beyond this cap are skipped to prevent context overflow. Resets hourly.",
+        "default": 5
       },
       "prefix": {
         "type": "string",

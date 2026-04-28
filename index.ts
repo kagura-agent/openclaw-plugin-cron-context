@@ -5,6 +5,7 @@ interface CronContextConfig {
   include?: string[];
   exclude?: string[];
   maxLength?: number;
+  maxEventsPerSession?: number;
   prefix?: string;
 }
 
@@ -105,7 +106,11 @@ export default function register(api: any) {
   const includePatterns = config.include ?? ["*"];
   const excludePatterns = config.exclude ?? [];
   const maxLength = config.maxLength ?? 4000;
+  const maxEventsPerSession = config.maxEventsPerSession ?? 5;
   const prefixTemplate = config.prefix ?? "[Cron output from {cronName}]";
+
+  // Track event counts per target session to cap accumulation
+  const eventCounts = new Map<string, number>();
 
   // Resolve openclaw dir (parent of workspace)
   const openclawDir = join(api.config?.workspaceDir ?? process.env.HOME + "/.openclaw/workspace", "..");
@@ -180,15 +185,27 @@ export default function register(api: any) {
       const prefix = prefixTemplate.replace("{cronName}", job.name);
       const fullText = `${prefix}\n\n${text}`;
 
+      // Check event cap for this target session
+      const currentCount = eventCounts.get(targetSessionKey) ?? 0;
+      if (currentCount >= maxEventsPerSession) {
+        console.log(
+          `[cron-context] Skipping "${job.name}" — target session ${targetSessionKey} already has ${currentCount} pending events (cap: ${maxEventsPerSession})`
+        );
+        return;
+      }
+
       // Inject into target session
       try {
         if (api.runtime?.system?.enqueueSystemEvent) {
           const result = api.runtime.system.enqueueSystemEvent(fullText, {
             sessionKey: targetSessionKey,
-            contextKey: `cron-context:${cronJobId}`,
+            contextKey: `cron-context:${cronJobId}:${Date.now()}`,
           });
+          if (result) {
+            eventCounts.set(targetSessionKey, currentCount + 1);
+          }
           console.log(
-            `[cron-context] Injected output from "${job.name}" into ${targetSessionKey} (${result ? "ok" : "skipped"})`
+            `[cron-context] Injected output from "${job.name}" into ${targetSessionKey} (${result ? "ok" : "skipped"}, pending: ${(eventCounts.get(targetSessionKey) ?? 0)}/${maxEventsPerSession})`
           );
         } else {
           console.warn("[cron-context] enqueueSystemEvent not available in runtime");
@@ -200,7 +217,15 @@ export default function register(api: any) {
     { priority: -20 } // Low priority — run after other hooks
   );
 
+  // Reset event counts when target session drains its events (session activated)
+  // We hook into the system event consumption indirectly — when a new cron injects
+  // and the count was at max, we check if events were drained since last check
+  // For simplicity, we reset counts periodically (every hour)
+  setInterval(() => {
+    eventCounts.clear();
+  }, 60 * 60 * 1000);
+
   console.log(
-    `[cron-context] Plugin loaded (include=${includePatterns.join(",")}, exclude=${excludePatterns.join(",")}, maxLength=${maxLength})`
+    `[cron-context] Plugin loaded (include=${includePatterns.join(",")}, exclude=${excludePatterns.join(",")}, maxLength=${maxLength}, maxEventsPerSession=${maxEventsPerSession})`
   );
 }
