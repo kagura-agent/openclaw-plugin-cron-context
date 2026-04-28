@@ -167,7 +167,7 @@ export default function register(api: any) {
       if (job.sessionTarget !== "isolated") return;
 
       // Build target session key
-      const agentId = ctx.agentId ?? "kagura";
+      const agentId = ctx.agentId ?? "main";
       const targetSessionKey = buildTargetSessionKey(agentId, job.delivery);
       if (!targetSessionKey) {
         console.warn("[cron-context] Could not build target session key for job:", job.name);
