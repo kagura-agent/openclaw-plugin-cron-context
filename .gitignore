@@ -1,0 +1,9 @@
+node_modules/
+dist/
+*.env
+.nudge-state.json
+.memex/
+.memexrc
+credentials*
+token*
+*.key
